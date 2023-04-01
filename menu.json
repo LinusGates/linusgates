@@ -1,0 +1,141 @@
+{
+    "environment": {
+        "windowsboot": "/mnt/windowsboot",
+        "windowsimg": "/mnt/windowsimg",
+        "WIM": "",
+        "INDEX": ""
+    },
+    "homeMenu": "setup",
+    "menus": {
+        "setup": {
+            "noGoBack": true,
+            "title": "What would you like to do today?",
+            "items": [
+                {
+                    "text": "Install Windows onto this PC",
+                    "desc": "Guides you through installing and setting up Windows",
+                    "type": "menu",
+                    "action": "install-select_wim"
+                },
+                {
+                    "text": "Repair or modify this PC",
+                    "desc": "Fix and customize OSes supported by this install medium",
+                    "type": "menu",
+                    "action": "osmgr"
+                },
+				{
+					"type": "divider",
+					"action": "2"
+				},
+				{
+					"text": "Browse files on this PC",
+                    "desc": "Provides a basic file explorer interface",
+					"type": "menu",
+					"action": "browse"
+				},
+				{
+					"text": "Exit",
+                    "desc": "Exits setup, crashing the Linux kernel if booted as init",
+					"type": "internal",
+					"action": "exit"
+				}
+            ]
+        },
+        "install-select_wim": {
+            "title": "Which image of Windows would you like to install from?",
+            "items": []
+        },
+        "install-select_edition": {
+            "title": "Which edition from this image would you like to install?",
+            "items": []
+        },
+        "install-select_disk": {
+            "title": "Which disk would you like to install Windows $WINDOWS to?",
+            "items": []
+        },
+        "install-windows-confirmation": {
+            "title": "Are you ready to install Windows $WINDOWS?",
+            "items": [
+                {
+                    "text": "View my choices before I continue",
+                    "desc": "Displays all your selected installation choices",
+                    "type": "note",
+                    "action": "\n\tWindows $WINDOWS\n\tEdition: $SUM\n\tBootloader: $BOOT\n\tTarget install disk: $DISKPRETTY\n\tSystem root: C:\\$ROOT\n\tGUID: $GUID"
+                },
+                {
+                    "text": "I'm ready to install Windows $WINDOWS!",
+                    "desc": "Commits to installing Windows $WINDOWS to $DISKPRETTY with the selected choices",
+                    "type": "menu",
+                    "action": "install-windows"
+                }
+            ]
+        },
+        "install-windows": {
+            "noGoBack": true,
+            "noSelector": true,
+            "title": "* * * Installing Windows, please be patient * * *\n\n\t$SUM",
+            "items": []
+        },
+        "install-complete": {
+            "noGoBack": true,
+            "title": "Install finished!",
+            "items": [
+                {
+                    "text": "Reboot to complete the install",
+                    "desc": "Make sure to remove this installation medium before pressing enter!",
+                    "type": "internal",
+                    "action": "reboot"
+                },
+                {
+                    "text": "Shut down to complete the install later",
+                    "desc": "Make sure to remove this installation medium before pressing enter!",
+                    "type": "internal",
+                    "action": "shutdown"
+                },
+                {
+                    "type": "divider",
+                    "action": "2"
+                },
+                {
+                    "text": "Return to setup to do something else",
+                    "desc": "Takes you back to the install and recovery choices",
+                    "type": "menu",
+                    "action": "setup"
+                }
+            ]
+        },
+        "osmgr": {
+            "title": "Which operating system would you like to manage?",
+            "items": []
+        },
+		"browse": {
+			"title": "Peek into the mounted filesystem",
+			"items": [
+				{
+					"text": "Browse the Windows bootloader",
+                    "desc": "Must be mounted first!",
+					"type": "explorer $windowsboot",
+					"action": "file $?"
+				},
+				{
+					"text": "Browse the Windows system",
+                    "desc": "Must be mounted first!",
+					"type": "explorer $windowsimg",
+					"action": "file $?"
+				},
+				{
+					"text": "Browse the available OS image sources",
+                    "desc": "Contains your WIM and ESD images for a Windows install/repair",
+					"type": "explorer $WORKINGDIR/sources",
+					"action": "file $?"
+				},
+                {
+                    "text": "Browse the live filesystem",
+                    "desc": "The booted Linux filesystem including all the mountpoints",
+                    "type": "explorer",
+                    "action": "file $?"
+                }
+			]
+		}
+    }
+}
