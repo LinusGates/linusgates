@@ -19,9 +19,12 @@ type MenuItem struct {
 // MenuItemList holds a list of items to interact with
 type MenuItemList struct {
 	Title      string      `json:"title"`
+	Subtitle   string      `json:"subtitle"`
 	Items      []*MenuItem `json:"items"`      //items to display on the page
 	NoGoBack   bool        `json:"noGoBack"`   //hides the go back button
 	NoSelector bool        `json:"noSelector"` //hides the item cursor
+	DefaultCur int         `json:"defaultCur"` //the cursor to set by default
+	Exec       string      `json:"exec"`       //a line interpreted as an exec action
 }
 
 func (m *MenuItemList) AddItem(name, desc, itemType, action string) {
@@ -158,21 +161,34 @@ func (me *MenuEngine) Action() {
 		return
 	}
 
+	if len(me.Menus[me.LoadedMenu].Items) == 0 {
+		return
+	}
+
 	selectedItem := me.Menus[me.LoadedMenu].Items[me.ItemCursor]
 	selectedAction := me.Vars(selectedItem.Action)
 	itemArgs := strings.Split(me.Vars(selectedItem.Type), " ")
+	actionArgs := strings.Split(selectedAction, " ")
 	switch itemArgs[0] {
 	case "internal":
-		switch selectedAction {
+		switch actionArgs[0] {
+		case "abort":
+			if len(actionArgs) > 1 {
+				me.ChangeMenu(actionArgs[1])
+			}
+			os.Exit(1)
 		case "exit":
+			if len(actionArgs) > 1 {
+				me.ChangeMenu(actionArgs[1])
+			}
 			os.Exit(0)
 		default:
-			me.ErrorText("Unknown internal action: " + selectedAction)
+			me.ErrorText("Unknown internal action", selectedAction)
 		}
 	case "menu":
-		me.ChangeMenu(selectedAction)
+		me.ChangeMenu(actionArgs[0])
 	case "exec":
-		me.Run(selectedAction)
+		me.RunRealtime(selectedAction)
 	case "explorer":
 		workingDir := "/"
 		if len(itemArgs) > 1 {
@@ -199,19 +215,24 @@ func (me *MenuEngine) Action() {
 		if len(itemArgs) > 2 {
 			me.Environment[itemArgs[1]] = itemArgs[2] //The value was supplied by the menu
 		}
+		for i := 3; i < len(itemArgs); i++ {
+			if i+1 < len(itemArgs) {
+				me.Environment[itemArgs[i]] = itemArgs[i+1]
+			}
+			i++
+		}
 
-		varAction := strings.Split(selectedAction, " ")
-		switch varAction[0] {
+		switch actionArgs[0] {
 		case "explorer":
 			workingDir := "/"
-			if len(varAction) > 1 {
-				workingDir = strings.Join(varAction[1:], " ")
+			if len(actionArgs) > 1 {
+				workingDir = strings.Join(actionArgs[1:], " ")
 			}
 			me.Explorer(workingDir, "")
 		case "menu":
-			me.ChangeMenu(varAction[1])
+			me.ChangeMenu(actionArgs[1])
 		default:
-			me.ErrorText("Unknown action for var " + me.Return + ": " + selectedAction)
+			me.ErrorText("Unknown action for var " + me.Return, selectedAction)
 		}
 	case "note":
 		if selectedAction != "" {
@@ -220,7 +241,7 @@ func (me *MenuEngine) Action() {
 			me.Redraw() //hide the newline
 		}
 	default:
-		me.ErrorText("Unknown action: " + selectedItem.Type + ":" + selectedAction)
+		me.ErrorText("Unknown action: " + selectedItem.Type, selectedAction)
 	}
 }
 
@@ -260,15 +281,29 @@ func (me *MenuEngine) Explorer(workingDir, bin string) {
 	me.ChangeMenu(workingDir)
 }
 
-// Run runs the given command in a special log menu
+// RunRealtime runs the given command, but doesn't halt the menu engine
+func (me *MenuEngine) RunRealtime(command string) {
+	me.Lock()
+	defer me.Unlock()
+	err := RunRealtime(me.Vars(command))
+	if err != nil {
+		me.ErrorText(err.Error(), "")
+		return
+	}
+}
+
+// Run runs the given command, but halts the menu engine until completion
 func (me *MenuEngine) Run(command string) {
 	me.Lock()
 	defer me.Unlock()
-	err := RunRealtime(command)
+	out, err := Run(me.Vars(command))
+	outString := string(out)
 	if err != nil {
-		me.ErrorText(err.Error())
+		me.ErrorText(err.Error(), outString)
 		return
 	}
+	me.Menus[me.LoadedMenu].AddItem(outString, "Task complete", "note", "")
+	me.render()
 }
 
 // AddMenu adds a menu to the menu list
@@ -286,11 +321,10 @@ func (me *MenuEngine) RemoveMenu(menuID string) {
 // ChangeMenu changes to another available menu
 func (me *MenuEngine) ChangeMenu(menuID string) {
 	me.init()
-	defer me.render()
 
-	_, ok := me.Menus[menuID]
+	lm, ok := me.Menus[menuID]
 	if !ok {
-		me.ErrorText("Unknown menu: " + menuID)
+		me.ErrorText("Unknown menu", menuID)
 		return
 	}
 
@@ -300,10 +334,13 @@ func (me *MenuEngine) ChangeMenu(menuID string) {
 	}
 
 	me.LoadedMenu = menuID
-	me.ItemCursor = 0
-	if me.isBackVisible() {
-		me.ItemCursor = -1
+	me.ItemCursor = lm.DefaultCur
+
+	if lm.Exec != "" {
+		me.Run(lm.Exec)
 	}
+
+	me.render()
 
 	_, ok = me.Hooks[menuID]
 	if ok {
@@ -336,7 +373,7 @@ func (me *MenuEngine) PrevMenu() {
 		me.MenuHistory = append(me.MenuHistory, me.LoadedMenu)
 		me.ItemHistory = append(me.ItemHistory, me.ItemCursor)
 
-		me.ErrorText("Unknown menu: " + menuID)
+		me.ErrorText("Unknown menu", menuID)
 		return
 	}
 
@@ -356,10 +393,11 @@ func (me *MenuEngine) PrevMenu() {
 
 // ErrorText generates an error message menu with menuID "INTERNAL_ERROR_TEXT" and navigates to it
 // It is used internally as well as being made available, so refrain from using menuIDs starting with "INTERNAL"
-func (me *MenuEngine) ErrorText(err string) {
+func (me *MenuEngine) ErrorText(err, extra string) {
 	menuError := &MenuItemList{
 		NoGoBack: true,
 		Title:    err,
+		Subtitle: extra,
 		Items: []*MenuItem{
 			{
 				Text:   "Return home to start over",
@@ -396,14 +434,11 @@ func (me *MenuEngine) GetRender() string {
 	menu := ""
 
 	lm := me.Menus[me.LoadedMenu]
-	menu += "  " + lm.Title + "\n\n"
-	if me.isBackVisible() {
-		if me.ItemCursor == -1 {
-			menu += "   --> Go back\n"
-		} else {
-			menu += "      Go back\n"
-		}
-		menu += "\n"
+	if lm.Title != "" {
+		menu += lm.Title + "\n\n"
+	}
+	if lm.Subtitle != "" {
+		menu += lm.Subtitle + "\n\n"
 	}
 	if len(lm.Items) > 0 {
 		for i := 0; i < len(lm.Items); i++ {
@@ -418,9 +453,9 @@ func (me *MenuEngine) GetRender() string {
 				}
 			default:
 				if !lm.NoSelector && me.ItemCursor == i {
-					menu += "   --> "
+					menu += "\t--> "
 				} else {
-					menu += "      "
+					menu += "\t   "
 				}
 				menu += lm.Items[i].Text
 				if lm.Items[i].Type == "menu" {
@@ -429,6 +464,14 @@ func (me *MenuEngine) GetRender() string {
 				menu += "\n"
 			}
 		}
+	}
+	if me.isBackVisible() {
+		if me.ItemCursor == -1 {
+			menu += "\n\t--> "
+		} else {
+			menu += "\n\t   "
+		}
+		menu += "Go back\n\n"
 	}
 	menu += "\n"
 	if !lm.NoSelector {
