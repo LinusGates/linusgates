@@ -1,6 +1,19 @@
 #!/bin/bash
-cols=$(tput cols)
-lines=$(tput lines)
 
-sudo rm keyCalibration.json #Cheeky way to also ask for sudo password ahead of time
-go build && sudo ./linusgates --hLines $cols --vLines $lines
+clear
+
+# Build LinusGates
+set -e
+go build -ldflags="-s -w" -o linusgates
+set +e
+
+# Hide typed characters and the cursor
+stty -echo
+tput civis
+
+# Start LinusGates as root
+sudo ./linusgates
+
+# Restore terminal
+stty echo
+tput cnorm

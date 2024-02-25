@@ -46,21 +46,21 @@ type MenuEngine struct {
 	Hooks       map[string]func(me *MenuEngine) //run a hook after changing to a menu
 
 	//Rendering control
-	Render func(string)
+	Render func(*MenuRender)
 	LinesH int
 	LinesV int
 }
 
 // NewMenuEngine returns a menu engine ready to be used
-func NewMenuEngine(renderer func(string), width, height int) *MenuEngine {
+func NewMenuEngine(renderer func(*MenuRender)) *MenuEngine {
 	return &MenuEngine{
 		Menus:       make(map[string]*MenuItemList),
 		MenuHistory: make([]string, 0),
 		ItemHistory: make([]int, 0),
 		Environment: make(map[string]string),
 		Render:      renderer,
-		LinesH:      width,
-		LinesV:      height,
+		LinesH:      40,
+		LinesV:      40,
 		Hooks:       make(map[string]func(me *MenuEngine)),
 	}
 }
@@ -429,60 +429,74 @@ func (me *MenuEngine) ResetHistory() {
 	me.MenuHistory = make([]string, 0)
 }
 
+type MenuRender struct {
+	Header, Menu, Footer string
+}
+func (mr *MenuRender) Vars(me *MenuEngine) *MenuRender {
+	mr.Header = me.Vars(mr.Header)
+	mr.Menu = me.Vars(mr.Menu)
+	mr.Footer = me.Vars(mr.Footer)
+	return mr
+}
+
 // GetRender returns a rendered menu text to be displayed immediately, as the menu state can change freely before and after
-func (me *MenuEngine) GetRender() string {
-	menu := ""
+func (me *MenuEngine) GetRender() *MenuRender {
+	menu := &MenuRender{}
 
 	lm := me.Menus[me.LoadedMenu]
 	if lm.Title != "" {
-		menu += lm.Title + "\n\n"
+		menu.Header += lm.Title
 	}
 	if lm.Subtitle != "" {
-		menu += lm.Subtitle + "\n\n"
+		if menu.Header != "" {
+			menu.Header += "\n\n"
+		}
+		menu.Header += lm.Subtitle
 	}
+
 	if len(lm.Items) > 0 {
 		for i := 0; i < len(lm.Items); i++ {
 			switch lm.Items[i].Type {
 			case "divider":
 				if length, err := strconv.Atoi(lm.Items[i].Action); err != nil {
 					for j := 0; j < length; j++ {
-						menu += "\n"
+						menu.Menu += "\n"
 					}
 				} else {
-					menu += "\n"
+					menu.Menu += "\n"
 				}
 			default:
 				if !lm.NoSelector && me.ItemCursor == i {
-					menu += "\t--> "
+					menu.Menu += "-> "
 				} else {
-					menu += "\t   "
+					menu.Menu += "  "
 				}
-				menu += lm.Items[i].Text
+				menu.Menu += lm.Items[i].Text
 				if lm.Items[i].Type == "menu" {
-					menu += " ..."
+					menu.Menu += " ..."
 				}
-				menu += "\n"
+				menu.Menu += "\n"
 			}
 		}
 	}
 	if me.isBackVisible() {
 		if me.ItemCursor == -1 {
-			menu += "\n\t--> "
+			menu.Menu += "\n-> "
 		} else {
-			menu += "\n\t   "
+			menu.Menu += "\n  "
 		}
-		menu += "Go back\n\n"
+		menu.Menu += "Go back\n\n"
 	}
-	menu += "\n"
+
 	if !lm.NoSelector {
 		if me.ItemCursor < 0 {
-			menu += " - Return to the previous menu"
+			menu.Footer += " - Return to the previous menu"
 		} else if len(lm.Items) > 0 && lm.Items[me.ItemCursor].Desc != "" {
-			menu += " - " + lm.Items[me.ItemCursor].Desc
+			menu.Footer += " - " + lm.Items[me.ItemCursor].Desc
 		}
 	}
 
-	return me.Vars(menu)
+	return menu.Vars(me)
 }
 
 // Vars returns a string formatted with all vars replaced, in order from longest var name to shortest to avoid partial var name replacements

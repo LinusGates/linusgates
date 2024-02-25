@@ -12,13 +12,13 @@
             "title": "What would you like to do today?",
             "items": [
                 {
-                    "text": "Install Windows onto this PC",
+                    "text": "Install Windows",
                     "desc": "Guides you through installing and setting up Windows",
                     "type": "menu",
                     "action": "install-select_wim"
                 },
                 {
-                    "text": "Repair or modify this PC",
+                    "text": "Repair or modify an OS",
                     "desc": "Fix and customize OSes supported by this install medium",
                     "type": "menu",
                     "action": "osmgr"
@@ -28,14 +28,14 @@
 					"action": "2"
 				},
 				{
-					"text": "Browse files on this PC",
+					"text": "Browse files",
                     "desc": "Provides a basic file explorer interface",
 					"type": "menu",
 					"action": "browse"
 				},
 				{
 					"text": "Exit",
-                    "desc": "Exits setup, crashing the Linux kernel if booted as init",
+                    "desc": "Exits from the menu",
 					"type": "internal",
 					"action": "exit"
 				}
@@ -73,12 +73,14 @@
         "install-windows": {
             "noGoBack": true,
             "noSelector": true,
-            "title": "* * * Installing Windows, please be patient * * *\n\n\t$SUM",
+            "title": "* * * I N S T A L L I N G   W I N D O W S * * *",
+			"subtitle": "$SUM",
             "items": []
         },
         "install-complete": {
             "noGoBack": true,
-            "title": "Install finished!",
+            "title": "Windows $WINDOWS",
+			"subtitle": "Install complete!",
             "items": [
                 {
                     "text": "Reboot to complete the install",
@@ -109,7 +111,7 @@
             "items": []
         },
 		"browse": {
-			"title": "Peek into the mounted filesystem",
+			"title": "Peek into the mounted filesystems",
 			"items": [
 				{
 					"text": "Browse the Windows bootloader",

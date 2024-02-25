@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 func Run(prog string, args ...string) ([]byte, error) {
@@ -36,4 +37,13 @@ func RunRealtime(prog string, args ...string) error {
 		err = nil
 	}
 	return err
+}
+
+func Interval(dur time.Duration, call func() error) {
+	for {
+		if err := call(); err != nil {
+			return
+		}
+		time.Sleep(dur)
+	}
 }

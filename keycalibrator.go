@@ -10,6 +10,10 @@ import (
 	"github.com/JoshuaDoes/json"
 )
 
+var (
+	ERR_CANCELLED = fmt.Errorf("calibrator: cancelled")
+)
+
 type MenuKeycodeBinding struct {
 	Keycode   uint16 `json:"keycode"`
 	Action    string `json:"action"`
@@ -42,13 +46,18 @@ func bindKeys() {
 
 type KeyCalibration struct {
 	Ready  bool
+	Cancel bool
 	Action string
 	KLs    []*KeycodeListener
 }
 
 func (kc *KeyCalibration) Input(keyboard string, keycode uint16, onRelease bool) {
+	if kc.Cancel {
+		return
+	}
 	if !kc.Ready {
-		os.Exit(0)
+		kc.Cancel = true
+		return
 	}
 	if kc.Action == "" || kc.Action == "cancel" {
 		kc.Action = ""
@@ -68,7 +77,7 @@ func (kc *KeyCalibration) Input(keyboard string, keycode uint16, onRelease bool)
 	kc.Action = ""
 }
 
-func calibrate() {
+func calibrate() error {
 	//Generate a key calibration file if one doesn't exist yet
 	calibrator := &KeyCalibration{KLs: make([]*KeycodeListener, 0)}
 
@@ -82,14 +91,14 @@ func calibrate() {
 		return nil
 	})
 	if err != nil {
-		panic(fmt.Sprintf("error walking inputs: %v", err))
+		return fmt.Errorf("error walking inputs: %v", err)
 	}
 
 	//Bind all keyboards to calibrator input
 	for _, keyboard := range keyboards {
 		kl, err := NewKeycodeListener(keyboard)
 		if err != nil {
-			panic(fmt.Sprintf("error listening to walked keyboard %s: %v", keyboard, err))
+			return fmt.Errorf("error listening to walked keyboard %s: %v", keyboard, err)
 		}
 		kl.RootBind = calibrator.Input
 		calibrator.KLs = append(calibrator.KLs, kl)
@@ -111,9 +120,7 @@ func calibrate() {
 				}
 
 				clear()
-				fmt.Println("\t\tYou've calibrated before!\n")
-				time.Sleep(time.Second * 2)
-				fmt.Println("\t\tPress any key within\n\t\t5 seconds to recalibrate.\n")
+				println("Press any key within\n5 seconds to recalibrate.\n")
 				calibrator.Ready = true
 				calibrator.Action = "cancel"
 				timeout := time.Now()
@@ -125,7 +132,7 @@ func calibrate() {
 				}
 				if time.Now().Sub(timeout).Seconds() < 5 {
 					calibrator.Action = ""
-					fmt.Println("\t\tRecalibration time!")
+					println("Recalibration time!")
 					time.Sleep(time.Second * 2)
 					continue
 				}
@@ -135,57 +142,62 @@ func calibrate() {
 			calibrator.Ready = false
 			keyCalibration = make(map[string][]*MenuKeycodeBinding)
 			clear()
-			fmt.Println("\t\tWelcome to the calibrator!\n")
-			fmt.Println("\t\tPress any key to cancel.\n")
+			println("Welcome to the calibrator!\n")
+			println("Press any key to cancel.\n")
 			time.Sleep(time.Second * 2)
-			fmt.Println("\t\tControllers and remotes\n\t\tare also supported.\n")
+			if calibrator.Cancel { return ERR_CANCELLED }
+			println("Controllers and remotes\nare also supported.\n")
 			time.Sleep(time.Second * 2)
-			fmt.Println("\t\tThis is a guided process.\n")
+			if calibrator.Cancel { return ERR_CANCELLED }
+			println("This is a guided process.\n")
 			time.Sleep(time.Second * 2)
-			fmt.Println("\t\tGet ready!\n")
+			if calibrator.Cancel { return ERR_CANCELLED }
+			println("Get ready!\n")
+			if calibrator.Cancel { return ERR_CANCELLED }
 			time.Sleep(time.Second * 3)
+			if calibrator.Cancel { return ERR_CANCELLED }
 		case 2:
 			clear()
 			calibrator.Ready = true
 			calibrator.Action = "nextItem"
-			fmt.Printf("\n")
-			fmt.Println("\t\tPress any key to use to\n\t\tnavigate down in a menu.\n")
-			fmt.Println("\t\t\tRecommended: volume down")
+			printf("\n")
+			println("Press any key to use to\nnavigate down in a menu.\n")
+			println("Recommended: volume down")
 			for calibrator.Action != "" {
 			}
 		case 3:
 			calibrator.Action = "prevItem"
-			fmt.Printf("\n")
-			fmt.Println("\t\tPress any key to use to\n\t\tnavigate up in a menu.\n")
-			fmt.Println("\t\t\tRecommended: volume up")
+			printf("\n")
+			println("Press any key to use to\nnavigate up in a menu.\n")
+			println("Recommended: volume up")
 			for calibrator.Action != "" {
 			}
 		case 4:
 			calibrator.Action = "selectItem"
-			fmt.Printf("\n")
-			fmt.Println("\t\tPress any key to use to\n\t\tselect a menu item.\n")
-			fmt.Println("\t\t\tRecommended: touch screen")
+			printf("\n")
+			println("Press any key to use to\nselect a menu item.\n")
+			println("Recommended: touch screen")
 			for calibrator.Action != "" {
 			}
 		case 5:
 			clear()
-			fmt.Println("\t\tSaving results...\n")
+			println("Saving results...\n")
 			keyboards, err := json.Marshal(keyCalibration, true)
 			if err != nil {
-				panic(fmt.Sprintf("error encoding calibration results: %v", err))
+				return fmt.Errorf("error encoding calibration results: %v", err)
 			}
 			keyboardsFile, err := os.Create(keyCalibrationFile)
 			if err != nil {
-				panic(fmt.Sprintf("error creating calibration file: %v", err))
+				return fmt.Errorf("error creating calibration file: %v", err)
 			}
 			defer keyboardsFile.Close()
 			_, err = keyboardsFile.Write(keyboards)
 			if err != nil {
-				panic(fmt.Sprintf("error writing calibration file: %v", err))
+				return fmt.Errorf("error writing calibration file: %v", err)
 			}
-			//fmt.Println(string(keyboards))
-			fmt.Println("\t\tCalibration complete!")
-			time.Sleep(time.Second * 2)
+			//println(string(keyboards))
+			//println("Calibration complete!")
+			//time.Sleep(time.Second * 2)
 			//calibrator.Ready = false
 		}
 	}
@@ -193,4 +205,5 @@ func calibrate() {
 	for i := 0; i < len(calibrator.KLs); i++ {
 		calibrator.KLs[i].Close()
 	}
+	return nil
 }
